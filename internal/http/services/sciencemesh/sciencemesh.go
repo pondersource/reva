@@ -120,7 +120,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return nil
+	return []string{"/create-share"}
 }
 
 func (s *svc) Handler() http.Handler {
