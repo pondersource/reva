@@ -19,7 +19,6 @@
 package sciencemesh
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"mime"
@@ -27,19 +26,17 @@ import (
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-playground/validator/v10"
-	"google.golang.org/grpc/metadata"
 )
 
 var validate = validator.New()
@@ -61,10 +58,6 @@ type createShareRequest struct {
 	Role              string `json:"role" validate:"oneof=viewer editor"`
 	RecipientUsername string `json:"recipientUsername" validate:"required"`
 	RecipientHost     string `json:"recipientHost" validate:"required"`
-	// FIXME: the client should not authenticate here
-	LoginType     string `json:"loginType" validate:"required"`
-	LoginUsername string `json:"loginUsername" validate:"required"`
-	LoginPassword string `json:"loginPassword" validate:"required"`
 }
 
 // CreateShare creates an OCM share.
@@ -77,27 +70,10 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FIXME: the client should be already authenticated
-	res, err := h.gatewayClient.Authenticate(context.Background(), &gateway.AuthenticateRequest{
-		Type:         req.LoginType,
-		ClientId:     req.LoginUsername,
-		ClientSecret: req.LoginPassword,
-	})
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "unexpected error", err)
-		return
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, res.Status.Message, errors.New(res.Status.Message))
-		return
-	}
-
 	ctx := r.Context()
-	ctx = ctxpkg.ContextSetToken(ctx, res.Token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
 
-	statRes, err := h.gatewayClient.Stat(ctx, &providerv1beta1.StatRequest{
-		Ref: &providerv1beta1.Reference{
+	statRes, err := h.gatewayClient.Stat(ctx, &providerpb.StatRequest{
+		Ref: &providerpb.Reference{
 			Path: req.SourcePath,
 		},
 	})
@@ -127,19 +103,19 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	perm, viewMode := getPermissionsByRole(req.Role)
 
-	shareRes, err := h.gatewayClient.CreateOCMShare(ctx, &ocmv1beta1.CreateOCMShareRequest{
+	shareRes, err := h.gatewayClient.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
 		ResourceId: statRes.Info.Id,
-		Grantee: &providerv1beta1.Grantee{
-			Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER,
-			Id: &providerv1beta1.Grantee_UserId{
-				UserId: &userv1beta1.UserId{
+		Grantee: &providerpb.Grantee{
+			Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+			Id: &providerpb.Grantee_UserId{
+				UserId: &userpb.UserId{
 					Idp:      req.RecipientHost,
 					OpaqueId: req.RecipientUsername,
 				},
 			},
 		},
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
-		AccessMethods: []*ocmv1beta1.AccessMethod{
+		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(perm),
 			share.NewWebappAccessMethod(viewMode),
 		},
@@ -168,7 +144,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func getPermissionsByRole(role string) (*providerv1beta1.ResourcePermissions, appprovider.ViewMode) {
+func getPermissionsByRole(role string) (*providerpb.ResourcePermissions, appprovider.ViewMode) {
 	switch role {
 	case "viewer":
 		return conversions.NewViewerRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_ONLY
