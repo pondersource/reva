@@ -76,7 +76,10 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
-require github.com/go-jose/go-jose/v3 v3.0.0 // indirect
+require (
+	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
+	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
+)
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
@@ -168,7 +171,6 @@ require (
 	go.opentelemetry.io/otel/metric v0.34.0 // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
